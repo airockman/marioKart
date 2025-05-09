@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="format-detection" content="telephone=no">
+  <title>마리오카트 경주 게임</title>
+  <style>
+    * {
+      -webkit-tap-highlight-color: transparent;
+      -webkit-user-select: none;
+      user-select: none;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      position: fixed;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #cceeff;
+    }
+
+    .game-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      height: 100%;
+      padding: 10px;
+      box-sizing: border-box;
+      touch-action: none;
+    }
+
+    h1 {
+      font-size: 6vw;
+      margin: 5px 0;
+      color: #333;
+      text-align: center;
+    }
+
+    @media (min-width: 768px) {
+      h1 {
+        font-size: 24px;
+      }
+    }
+
+    #gameCanvas {
+      background-color: #87cefa;
+      border: 2px solid black;
+      touch-action: none;
+      display: block;
+      width: 100%;
+      max-width: 600px;
+      max-height: 60vh;
+      margin: 0 auto;
+    }
+
+    #info {
+      margin: 10px 0;
+      font-size: 18px;
+      font-weight: bold;
+      color: #333;
+      text-align: center;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      font-size: 18px;
+      margin: 5px;
+      border-radius: 8px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      cursor: pointer;
+      outline: none;
+      -webkit-appearance: none;
+      touch-action: manipulation;
+    }
+
+    .btn:active {
+      background-color: #3e8e41;
+      transform: scale(0.98);
+    }
+
+    #controls {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-areas:
+        ". up ."
+        "left down right";
+      gap: 5px;
+      width: 100%;
+      max-width: 300px;
+      margin-top: 10px;
+      touch-action: none;
+    }
+
+    .control-btn {
+      width: 65px;
+      height: 65px;
+      font-size: 28px;
+      border-radius: 50%;
+      background-color: rgba(73, 119, 209, 0.8);
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      border: none;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      -webkit-appearance: none;
+      touch-action: manipulation;
+      -webkit-touch-callout: none;
+    }
+
+    .control-btn:active {
+      background-color: rgba(58, 95, 168, 0.9);
+      transform: scale(0.95);
+      box-shadow: 0 2px 3px rgba(0, 0, 0, 0.2);
+    }
+
+    #upBtn { grid-area: up; margin: 0 auto; }
+    #leftBtn { grid-area: left; margin-left: auto; }
+    #downBtn { grid-area: down; margin: 0 auto; }
+    #rightBtn { grid-area: right; margin-right: auto; }
+
+    @media (max-height: 600px) {
+      .control-btn {
+        width: 50px;
+        height: 50px;
+        font-size: 20px;
+      }
+
+      h1 {
+        font-size: 16px;
+        margin: 3px 0;
+      }
+
+      #info {
+        margin: 5px 0;
+        font-size: 14px;
+      }
+
+      .btn {
+        padding: 8px 16px;
+        font-size: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="game-container">
+    <h1>마리오카트 vs 진격의 거인</h1>
+    <canvas id="gameCanvas" width="800" height="400"></canvas>
+    <div id="info">생명: <span id="lives">3</span> | 기록: <span id="bestTime">-</span>초</div>
+    <button id="startBtn" class="btn">시작하기</button>
+    <button id="restartBtn" class="btn" style="display:none;">다시 시작</button>
+
+    <div id="controls" style="display:none;">
+      <button id="upBtn" class="control-btn">↑</button>
+      <button id="leftBtn" class="control-btn">←</button>
+      <button id="downBtn" class="control-btn">↓</button>
+      <button id="rightBtn" class="control-btn">→</button>
+    </div>
+  </div>
+
+  <script>
+    // 게임 캔버스 및 요소 가져오기
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const restartBtn = document.getElementById("restartBtn");
+    const startBtn = document.getElementById("startBtn");
+    const livesEl = document.getElementById("lives");
+    const bestTimeEl = document.getElementById("bestTime");
+    const controlsDiv = document.getElementById("controls");
+    const upBtn = document.getElementById("upBtn");
+    const downBtn = document.getElementById("downBtn");
+    const leftBtn = document.getElementById("leftBtn");
+    const rightBtn = document.getElementById("rightBtn");
+
+    // 모바일 감지 - 여러 방법 사용
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
+                    'ontouchstart' in window ||
+                    window.innerWidth < 768;
+
+    // 코드 실행 확인용 콘솔 로그 추가
+    console.log("게임 초기화 중...");
+    console.log("모바일 감지:", isMobile);
+
+    // 모바일이면 컨트롤 표시 - 즉시 보이게 변경
+    if (isMobile) {
+      controlsDiv.style.display = "grid";
+      console.log("모바일 컨트롤 활성화");
+    }
+
+    // 스크롤 방지 및 터치 이벤트 처리 개선
+    function preventDefaultForEvent(e) {
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+    }
+
+    // 중요! 스크롤 방지는 캔버스에만 제한
+    canvas.addEventListener('touchmove', preventDefaultForEvent, { passive: false });
+    canvas.addEventListener('touchstart', preventDefaultForEvent, { passive: false });
+
+    // 모든 컨트롤 버튼에도 스크롤 방지 적용
+    document.querySelectorAll('.control-btn').forEach(btn => {
+      btn.addEventListener('touchmove', preventDefaultForEvent, { passive: false });
+      btn.addEventListener('touchstart', preventDefaultForEvent, { passive: false });
+    });
+
+    // SVG 데이터 URL 생성
+    const marioKartSVG = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50">
+        <path d="M20,35 L15,40 L10,40 L5,35 L5,30 L15,25 L30,25 L80,25 L90,30 L95,35 L85,40 L75,40 L70,35 L65,40 L55,40 L50,35 L45,40 L35,40 L30,35 Z" fill="#FF0000" />
+        <circle cx="25" cy="40" r="7" fill="#333" stroke="#777" stroke-width="2" />
+        <circle cx="75" cy="40" r="7" fill="#333" stroke="#777" stroke-width="2" />
+        <rect x="35" y="15" width="30" height="10" fill="#FF0000" />
+        <rect x="30" y="5" width="40" height="10" fill="#FF0000" rx="5" ry="5" />
+        <circle cx="50" cy="12" r="6" fill="#3333FF" />
+        <rect x="42" y="12" width="16" height="3" fill="#3333FF" />
+      </svg>
+    `;
+
+    const titanSVG = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 140">
+        <path d="M50,10 L60,25 L65,40 L65,60 L60,70 L50,75 L40,70 L35,60 L35,40 L40,25 Z" fill="#FFD700" />
+        <circle cx="50" cy="25" r="15" fill="#FFE0BD" />
+        <ellipse cx="43" cy="22" rx="2" ry="3" fill="#000" />
+        <ellipse cx="57" cy="22" rx="2" ry="3" fill="#000" />
+        <path d="M45,30 Q50,35 55,30" fill="none" stroke="#000" stroke-width="1" />
+        <rect x="35" y="75" width="10" height="30" fill="#FFE0BD" />
+        <rect x="55" y="75" width="10" height="30" fill="#FFE0BD" />
+        <rect x="30" y="105" width="15" height="30" fill="#8B4513" />
+        <rect x="55" y="105" width="15" height="30" fill="#8B4513" />
+        <rect x="35" y="60" width="30" height="45" fill="#8B4513" />
+      </svg>
+    `;
+
+    // SVG를 이미지로 변환하는 함수 - 에러 처리 강화
+    function svgToImage(svgString) {
+      return new Promise((resolve, reject) => {
+        try {
+          const svg64 = btoa(unescape(encodeURIComponent(svgString)));
+          const image = new Image();
+
+          image.onload = () => {
+            console.log("이미지 로드 성공");
+            resolve(image);
+          };
+
+          image.onerror = (err) => {
+            console.error("이미지 로드 실패:", err);
+            // 오류 시에도 해결하여 게임이 중단되지 않도록 함
+            resolve(new Image());
+          };
+
+          image.src = 'data:image/svg+xml;base64,' + svg64;
+        } catch (error) {
+          console.error("SVG 변환 오류:", error);
+          // 오류가 발생해도 게임이 중단되지 않도록 빈 이미지로 해결
+          resolve(new Image());
+        }
+      });
+    }
+
+    // 게임 상태 변수
+    let car = { x: 100, y: 180, width: 70, height: 35 };
+    let lives = 3;
+    let startTime;
+    let bestTime = localStorage.getItem("carRaceBestTime") || null;
+    let gameOver = false;
+    let gameStarted = false;
+    let scrollX = 0;
+    const trackLength = 5000;
+    let trackPath = [];
+    let keys = {};
+    let autoScrollSpeed = 2;
+    let obstacles = [];
+    let invincible = false;
+    let carImg, obstacleImg;
+    let lastTime = 0;
+    let animationId;
+    let loadingComplete = false;
+    let loadingAttempted = false;
+
+    // 트랙 생성 함수
+    function generateTrack() {
+      trackPath = [];
+      let y = 200;
+      for (let x = 0; x <= trackLength; x += 5) {
+        y += Math.sin(x * 0.01) * 2;
+        trackPath.push({ x, y });
+      }
+    }
+
+    // 장애물 생성 함수
+    function generateObstacles() {
+      obstacles = [];
+      for (let i = 500; i < trackLength; i += 400) {
+        const segment = trackPath.find(seg => seg.x >= i);
+        if (segment) {
+          obstacles.push({
+            x: i,
+            y: segment.y - 60,
+            width: 60,
+            height: 90,
+            rotation: Math.random() * 0.2 - 0.1
+          });
+        }
+      }
+    }
+
+    // 게임 초기화 함수
+    function resetGame() {
+      car = { x: 100, y: 180, width: 70, height: 35 };
+      lives = 3;
+      scrollX = 0;
+      gameOver = false;
+      gameStarted = false;
+      invincible = false;
+      livesEl.textContent = lives;
+
+      // 트랙과 장애물 생성
+      generateTrack();
+      generateObstacles();
+
+      // 버튼 상태 초기화
+      restartBtn.style.display = "none";
+      startBtn.style.display = "inline-block";
+
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+      }
+
+      // 기본 화면 그리기
+      draw();
+      console.log("게임 초기화 완료");
+    }
+
+    // 게임 시작 함수 - 로딩 확인 로직 개선
+    function startGame() {
+      // 로딩 시도가 없었다면 다시 시도
+      if (!loadingAttempted) {
+        console.log("로딩이 시도되지 않았습니다. 다시 로드합니다.");
+        loadGame().then(() => {
+          startGameActual();
+        });
+        return;
+      }
+
+      // 이미지가 로딩되지 않았더라도 일정 시간 후 게임 시작
+      if (!loadingComplete) {
+        console.log("이미지가 완전히 로드되지 않았지만 게임을 시작합니다.");
+        loadingComplete = true; // 강제로 로딩 완료 상태로 설정
+      }
+
+      startGameActual();
+    }
+
+    // 실제 게임 시작 처리
+    function startGameActual() {
+      gameStarted = true;
+      startTime = Date.now();
+      startBtn.style.display = "none";
+      lastTime = 0;
+      console.log("게임 시작!");
+      animate(0);
+    }
+
+    // 도로 Y 좌표 가져오기
+    function getRoadY(x) {
+      const seg = trackPath.find(s => s.x >= x);
+      return seg ? seg.y : 200;
+    }
+
+    // 렌더링 함수
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // 배경 - 마리오카트 느낌의 하늘
+      const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      gradient.addColorStop(0, "#5DBEFF");
+      gradient.addColorStop(1, "#87CEFA");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // 구름 그리기
+      ctx.fillStyle = "#FFFFFF";
+      for (let i = 0; i < 5; i++) {
+        const cloudX = (i * 200 - (scrollX * 0.2) % 1000) % 1000;
+        ctx.beginPath();
+        ctx.arc(cloudX, 50, 20, 0, Math.PI * 2);
+        ctx.arc(cloudX + 15, 40, 15, 0, Math.PI * 2);
+        ctx.arc(cloudX + 30, 50, 20, 0, Math.PI * 2);
+        ctx.arc(cloudX + 15, 60, 15, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 트랙 그리기
+      ctx.beginPath();
+      ctx.moveTo(0, trackPath[0].y);
+
+      // 화면에 표시될 수 있는 트랙 부분만 그리기
+      const startIndex = Math.max(0, Math.floor(scrollX / 5));
+      const endIndex = Math.min(trackPath.length - 1, Math.floor((scrollX + canvas.width + 100) / 5));
+
+      for (let i = startIndex; i <= endIndex; i++) {
+        ctx.lineTo(trackPath[i].x - scrollX, trackPath[i].y);
+      }
+
+      ctx.lineWidth = 150;
+      ctx.strokeStyle = "#CA8550"; // 마리오카트 느낌의 갈색 도로
+      ctx.stroke();
+
+      // 도로 위에 흰색 선 추가
+      ctx.beginPath();
+      for (let i = startIndex; i <= endIndex; i += 20) {
+        if (i + 10 <= endIndex) {
+          ctx.moveTo(trackPath[i].x - scrollX, trackPath[i].y);
+          ctx.lineTo(trackPath[i + 10].x - scrollX, trackPath[i + 10].y);
+        }
+      }
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = "#FFFFFF";
+      ctx.stroke();
+
+      // 목적지 그리기
+      const goalY = getRoadY(trackLength);
+      ctx.fillStyle = "green";
+      ctx.fillRect(trackLength - scrollX, goalY - 75, 20, 150);
+
+      // 체크무늬 깃발
+      ctx.fillStyle = "black";
+      const flagSize = 15;
+      for (let i = 0; i < 10; i++) {
+        for (let j = 0; j < 10; j++) {
+          if ((i + j) % 2 === 0) {
+            ctx.fillRect(trackLength - scrollX + (i * flagSize), goalY - 75 + (j * flagSize), flagSize, flagSize);
+          }
+        }
+      }
+
+      // 이미지가 로드되었을 때 이미지로 그리고, 아니면 단순한 도형으로 그리기
+      if (loadingComplete && carImg && carImg.complete && obstacleImg && obstacleImg.complete) {
+        // 장애물(진격의 거인) 그리기 (화면에 보이는 것만)
+        for (let obs of obstacles) {
+          const obsScreenX = obs.x - scrollX;
+          if (obsScreenX > -100 && obsScreenX < canvas.width + 100) {
+            ctx.save();
+            // 회전 적용
+            ctx.translate(obsScreenX + obs.width/2, obs.y + obs.height/2);
+            ctx.rotate(obs.rotation);
+            ctx.drawImage(obstacleImg, -obs.width/2, -obs.height/2, obs.width, obs.height);
+            ctx.restore();
+          }
+        }
+
+        // 자동차(마리오카트) 그리기 (깜박임 효과)
+        if (!invincible || Math.floor(Date.now() / 100) % 2) {
+          ctx.drawImage(carImg, car.x, car.y, car.width, car.height);
+        }
+      } else {
+        // 이미지 대신 도형으로 그리기 (폴백)
+        // 장애물 그리기
+        for (let obs of obstacles) {
+          const obsScreenX = obs.x - scrollX;
+          if (obsScreenX > -100 && obsScreenX < canvas.width + 100) {
+            ctx.save();
+            ctx.translate(obsScreenX + obs.width/2, obs.y + obs.height/2);
+            ctx.rotate(obs.rotation);
+            ctx.fillStyle = "#8B4513"; // 타이탄 색상
+            ctx.fillRect(-obs.width/2, -obs.height/2, obs.width, obs.height);
+            ctx.restore();
+          }
+        }
+
+        // 자동차 그리기
+        if (!invincible || Math.floor(Date.now() / 100) % 2) {
+          ctx.fillStyle = "#FF0000"; // 마리오카트 색상
+          ctx.fillRect(car.x, car.y, car.width, car.height);
+        }
+      }
+
+      // 게임 시작 전이면 안내 텍스트 표시
+      if (!gameStarted && !gameOver) {
+        ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+        ctx.fillRect(canvas.width/2 - 150, canvas.height/2 - 50, 300, 100);
+        ctx.fillStyle = "white";
+        ctx.font = "20px Arial";
+        ctx.fillText("마리오카트로 거인을 피해 달리세요!", canvas.width/2 - 140, canvas.height/2 - 15);
+        ctx.fillText("방향키나 터치로 움직입니다", canvas.width/2 - 100, canvas.height/2 + 15);
+      }
+
+      // 로딩 중 메시지 표시
+      if (!loadingComplete && loadingAttempted) {
+        ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+        ctx.fillRect(0, 0, canvas.width, 30);
+        ctx.fillStyle = "white";
+        ctx.font = "14px Arial";
+        ctx.fillText("리소스 로딩 중... 잠시만 기다려주세요", 10, 20);
+      }
+    }
+
+    // 게임 업데이트 함수
+    function update(deltaTime) {
+      if (!gameStarted || gameOver) return;
+
+      // 시간에 기반한 이동 계산
+      const deltaFactor = deltaTime / 16.667; // 60fps 기준으로 보정
+      scrollX += autoScrollSpeed * deltaFactor;
+
+      // 키보드 입력
+      if (keys["ArrowUp"] || keys["up"]) car.y -= 4 * deltaFactor;
+      if (keys["ArrowDown"] || keys["down"]) car.y += 4 * deltaFactor;
+      if (keys["ArrowLeft"] || keys["left"]) car.x -= 4 * deltaFactor;
+      if (keys["ArrowRight"] || keys["right"]) car.x += 3 * deltaFactor;
+
+      // 화면 이탈 체크
+      if (car.x < 0) car.x = 0;
+      if (car.y < 0) car.y = 0;
+      if (car.y > canvas.height - car.height) car.y = canvas.height - car.height;
+
+      // 트랙 이탈 체크 (생명 감소 없음, 단지 느리게 이동)
+      const roadY = getRoadY(scrollX + car.x);
+      if (car.y < roadY - 75 || car.y + car.height > roadY + 75) {
+        // 트랙 이탈시 속도 크게 감소
+        if (keys["ArrowRight"] || keys["right"]) car.x -= 2.5 * deltaFactor;
+        if (keys["ArrowLeft"] || keys["left"]) car.x += 2 * deltaFactor;
+
+        // 자동차가 더 느리게 움직이도록
+        if (keys["ArrowUp"] || keys["up"]) car.y += 2 * deltaFactor;
+        if (keys["ArrowDown"] || keys["down"]) car.y -= 2 * deltaFactor;
+
+        // 트랙 이탈 시 시각적 피드백
+        if (Math.floor(Date.now() / 100) % 2) {
+          ctx.fillStyle = "rgba(255, 0, 0, 0.3)";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+      }
+
+      // 장애물 충돌 체크
+      for (let obs of obstacles) {
+        const obsScreenX = obs.x - scrollX;
+        // 화면 부근의 장애물만 충돌 검사
+        if (obsScreenX > -100 && obsScreenX < canvas.width + 100) {
+          if (isColliding(car, { x: obsScreenX, y: obs.y, width: obs.width, height: obs.height }) && !invincible) {
+            // 충돌 시 생명 감소 및 무적 시간
+            triggerInvincibility();
+            break;
+          }
+        }
+      }
+
+      // 목적지 도달 체크
+      if (scrollX + car.x >= trackLength - 20) {
+        const time = ((Date.now() - startTime) / 1000).toFixed(2);
+        if (!bestTime || parseFloat(time) < parseFloat(bestTime)) {
+          bestTime = time;
+          localStorage.setItem("carRaceBestTime", bestTime);
+          bestTimeEl.textContent = bestTime;
+        }
+        endGame(`승리! 기록: ${time}초`);
+      }
+    }
+
+    // 무적 상태 트리거 함수
+    function triggerInvincibility() {
+      lives--;
+      livesEl.textContent = lives;
+      invincible = true;
+
+      // 진동 효과 (iOS 및 Android 지원)
+      if ("vibrate" in navigator) {
+        navigator.vibrate(200);
+      }
+
+      // 깜빡임 효과
+      let blinkCount = 0;
+      const blinkInterval = setInterval(() => {
+        blinkCount++;
+        if (blinkCount >= 10) {
+          clearInterval(blinkInterval);
+          invincible = false;
+        }
+      }, 200);
+
+      if (lives <= 0) {
+        endGame("패배! 거인에게 잡혀버렸습니다!");
+      }
+    }
+
+    // 게임 종료 함수
+    function endGame(message) {
+      gameOver = true;
+
+      // 게임 오버 메시지 배경
+      ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+      ctx.fillRect(canvas.width/2 - 150, canvas.height/2 - 50, 300, 100);
+
+      // 게임 오버 메시지
+      ctx.font = "24px Arial";
+      ctx.fillStyle = "white";
+      ctx.fillText(message, canvas.width/2 - 120, canvas.height/2);
+
+      restartBtn.style.display = "inline-block";
+    }
+
+    // 애니메이션 함수
+    function animate(timestamp) {
+      if (gameOver) return;
+
+      // 시간 기반 애니메이션
+      const deltaTime = lastTime ? timestamp - lastTime : 16.667;
+      lastTime = timestamp;
+
+      update(deltaTime);
+      draw();
+      animationId = requestAnimationFrame(animate);
+    }
+
+    // 충돌 감지 함수
+    function isColliding(a, b) {
+      return (
+        a.x < b.x + b.width &&
+        a.x + a.width > b.x &&
+        a.y < b.y + b.height &&
+        a.y + a.height > b.y
+      );
+    }
+
+    // 캔버스 크기 조정 함수 - 모바일 대응 개선
+    function resizeCanvas() {
+      // 캔버스 기본 크기 설정
+      canvas.width = 800;
+      canvas.height = 400;
+
+      const container = document.querySelector('.game-container');
+      const maxWidth = Math.min(container.clientWidth - 20, 600);
+      const maxHeight = window.innerHeight * 0.6;
+
+      const aspectRatio = 2; // width:height = 2:1
+
+      let newWidth = maxWidth;
+      let newHeight = newWidth / aspectRatio;
+
+      if (newHeight > maxHeight) {
+        newHeight = maxHeight;
+        newWidth = newHeight * aspectRatio;
+      }
+
+      // 캔버스 스타일 크기 설정
+      canvas.style.width = `${newWidth}px`;
+      canvas.style.height = `${newHeight}px`;
+
+      // 앱 스타일 조정
+      if (window.innerHeight < 500) {
+        document.querySelector('h1').style.fontSize = '16px';
+        document.querySelector('#info').style.margin = '5px 0';
+      }
+        console.log("캔버스 크기 조정:", newWidth, "x", newHeight);
+      }
+
+      // 키 입력 상태 확인 함수 추가
+      function logKeyState() {
+        console.log("키 상태:", JSON.stringify(keys));
+      }
+
+      // 키보드 이벤트 핸들러
+      document.addEventListener("keydown", function(e) {
+        keys[e.key] = true;
+        if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(e.key)) {
+          e.preventDefault();
+        }
+      });
+
+      document.addEventListener("keyup", function(e) {
+        keys[e.key] = false;
+      });
+
+      // 모바일 컨트롤 설정 - 개선된 버전
+      function setupMobileControls() {
+        // 방향키 설정을 위한 함수
+        function setupControlButton(btn, direction) {
+          // 터치 이벤트에서 다른 키 이름 사용 (충돌 방지)
+          btn.addEventListener("touchstart", function(e) {
+            e.preventDefault();
+            keys[direction] = true;
+            logKeyState(); // 키 상태 확인용
+          });
+
+          btn.addEventListener("touchend", function(e) {
+            e.preventDefault();
+            keys[direction] = false;
+          });
+
+          // 터치 이벤트가 캔슬되거나 버튼 밖으로 나갔을 때도 처리
+          btn.addEventListener("touchcancel", function(e) {
+            keys[direction] = false;
+          });
+
+          // 마우스 이벤트도 추가 (테스트용)
+          btn.addEventListener("mousedown", function(e) {
+            e.preventDefault();
+            keys[direction] = true;
+          });
+
+          btn.addEventListener("mouseup", function(e) {
+            e.preventDefault();
+            keys[direction] = false;
+          });
+
+          btn.addEventListener("mouseleave", function(e) {
+            keys[direction] = false;
+          });
+        }
+
+        setupControlButton(upBtn, "up");
+        setupControlButton(downBtn, "down");
+        setupControlButton(leftBtn, "left");
+        setupControlButton(rightBtn, "right");
+
+        console.log("모바일 컨트롤 설정 완료");
+      }
+
+      // 버튼 이벤트
+      restartBtn.addEventListener("click", resetGame);
+
+      startBtn.addEventListener("click", function() {
+        if (!gameStarted && !gameOver && loadingComplete) {
+          startGame();
+        } else {
+          console.log("게임 시작 불가:", gameStarted, gameOver, loadingComplete);
+        }
+      });
+
+      // 게임 로드
+      async function loadGame() {
+        try {
+          console.log("게임 리소스 로딩 시작");
+
+          // 이미지 로딩
+          const [carImgLoaded, obstacleImgLoaded] = await Promise.all([
+            svgToImage(marioKartSVG),
+            svgToImage(titanSVG)
+          ]);
+
+          carImg = carImgLoaded;
+          obstacleImg = obstacleImgLoaded;
+
+          console.log("이미지 로딩 완료");
+          loadingComplete = true;
+
+          // 베스트 타임 표시
+          if (bestTime) bestTimeEl.textContent = bestTime;
+
+          // 게임 초기화
+          generateTrack();
+          generateObstacles();
+          setupMobileControls();
+          resizeCanvas();
+          resetGame();
+        } catch (error) {
+          console.error("게임 로드 중 오류 발생:", error);
+
+          // 오류 메시지 표시
+          ctx.fillStyle = "black";
+          ctx.font = "20px Arial";
+          ctx.fillText("게임 로드 중 오류가 발생했습니다.", canvas.width/2 - 150, canvas.height/2);
+        }
+      }
+
+      // 페이지 로드 시 게임 초기화
+      window.addEventListener("DOMContentLoaded", loadGame);
+
+      // iOS에서의 오디오 해금을 위한 사용자 인터랙션 처리
+      document.addEventListener('touchstart', function() {
+        // 빈 오디오 컨텍스트 생성 및 시작
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (AudioContext) {
+          const audioCtx = new AudioContext();
+          const oscillator = audioCtx.createOscillator();
+          oscillator.connect(audioCtx.destination);
+          oscillator.start();
+          oscillator.stop(0.001);
+        }
+      }, { once: true });
+    </script>
+  </body>
+</html>
